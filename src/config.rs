@@ -62,6 +62,40 @@ impl Config {
                     .to_string(),
             );
         }
+
+        // Validate controller URL
+        if self.controller_url.is_empty() {
+            return Err("UNIFI_CONTROLLER_URL cannot be empty".to_string());
+        }
+        
+        if !self.controller_url.starts_with("http://") && !self.controller_url.starts_with("https://") {
+            return Err("UNIFI_CONTROLLER_URL must start with http:// or https://".to_string());
+        }
+
+        // Validate poll interval
+        if self.poll_interval == 0 {
+            return Err("POLL_INTERVAL must be greater than 0".to_string());
+        }
+
+        // Validate HTTP timeout
+        if self.http_timeout == 0 {
+            return Err("HTTP_TIMEOUT must be greater than 0".to_string());
+        }
+
+        // Validate port
+        if self.port == 0 {
+            return Err("METRICS_PORT cannot be 0".to_string());
+        }
+
+        // Validate log level
+        let valid_levels = ["trace", "debug", "info", "warn", "error"];
+        if !valid_levels.contains(&self.log_level.to_lowercase().as_str()) {
+            return Err(format!(
+                "LOG_LEVEL must be one of: {}",
+                valid_levels.join(", ")
+            ));
+        }
+
         Ok(())
     }
 }
@@ -154,5 +188,63 @@ mod tests {
         assert_eq!(config.log_level, "info");
         assert_eq!(config.http_timeout, 10);
         assert_eq!(config.verify_ssl, true);
+    }
+
+    #[test]
+    fn test_validate_empty_url() {
+        let mut config = create_test_config();
+        config.controller_url = "".to_string();
+        assert!(config.validate().is_err());
+        assert!(config.validate().unwrap_err().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_invalid_url_scheme() {
+        let mut config = create_test_config();
+        config.controller_url = "ftp://test.local".to_string();
+        assert!(config.validate().is_err());
+        assert!(config.validate().unwrap_err().contains("must start with http:// or https://"));
+    }
+
+    #[test]
+    fn test_validate_zero_poll_interval() {
+        let mut config = create_test_config();
+        config.poll_interval = 0;
+        assert!(config.validate().is_err());
+        assert!(config.validate().unwrap_err().contains("POLL_INTERVAL must be greater than 0"));
+    }
+
+    #[test]
+    fn test_validate_zero_timeout() {
+        let mut config = create_test_config();
+        config.http_timeout = 0;
+        assert!(config.validate().is_err());
+        assert!(config.validate().unwrap_err().contains("HTTP_TIMEOUT must be greater than 0"));
+    }
+
+    #[test]
+    fn test_validate_zero_port() {
+        let mut config = create_test_config();
+        config.port = 0;
+        assert!(config.validate().is_err());
+        assert!(config.validate().unwrap_err().contains("METRICS_PORT cannot be 0"));
+    }
+
+    #[test]
+    fn test_validate_invalid_log_level() {
+        let mut config = create_test_config();
+        config.log_level = "invalid".to_string();
+        assert!(config.validate().is_err());
+        assert!(config.validate().unwrap_err().contains("LOG_LEVEL must be one of"));
+    }
+
+    #[test]
+    fn test_validate_case_insensitive_log_level() {
+        let mut config = create_test_config();
+        config.log_level = "INFO".to_string();
+        assert!(config.validate().is_ok());
+        
+        config.log_level = "Debug".to_string();
+        assert!(config.validate().is_ok());
     }
 }
