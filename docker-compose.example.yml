@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  unifi-network-exporter:
+    build: .
+    container_name: unifi-network-exporter
+    restart: unless-stopped
+    ports:
+      - "9897:9897"
+    environment:
+      - UNIFI_CONTROLLER_URL=${UNIFI_CONTROLLER_URL:-https://192.168.1.1:8443}
+      - UNIFI_USERNAME=${UNIFI_USERNAME}
+      - UNIFI_PASSWORD=${UNIFI_PASSWORD}
+      - UNIFI_SITE=${UNIFI_SITE:-default}
+      - METRICS_PORT=${METRICS_PORT:-9897}
+      - POLL_INTERVAL=${POLL_INTERVAL:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - HTTP_TIMEOUT=${HTTP_TIMEOUT:-10}
+      - VERIFY_SSL=${VERIFY_SSL:-false}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=9897"
+      - "prometheus.io/path=/metrics"
