@@ -67,8 +67,10 @@ impl Config {
         if self.controller_url.is_empty() {
             return Err("UNIFI_CONTROLLER_URL cannot be empty".to_string());
         }
-        
-        if !self.controller_url.starts_with("http://") && !self.controller_url.starts_with("https://") {
+
+        if !self.controller_url.starts_with("http://")
+            && !self.controller_url.starts_with("https://")
+        {
             return Err("UNIFI_CONTROLLER_URL must start with http:// or https://".to_string());
         }
 
@@ -203,7 +205,12 @@ mod tests {
         let mut config = create_test_config();
         config.controller_url = "ftp://test.local".to_string();
         assert!(config.validate().is_err());
-        assert!(config.validate().unwrap_err().contains("must start with http:// or https://"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .contains("must start with http:// or https://")
+        );
     }
 
     #[test]
@@ -211,7 +218,12 @@ mod tests {
         let mut config = create_test_config();
         config.poll_interval = 0;
         assert!(config.validate().is_err());
-        assert!(config.validate().unwrap_err().contains("POLL_INTERVAL must be greater than 0"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .contains("POLL_INTERVAL must be greater than 0")
+        );
     }
 
     #[test]
@@ -219,7 +231,12 @@ mod tests {
         let mut config = create_test_config();
         config.http_timeout = 0;
         assert!(config.validate().is_err());
-        assert!(config.validate().unwrap_err().contains("HTTP_TIMEOUT must be greater than 0"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .contains("HTTP_TIMEOUT must be greater than 0")
+        );
     }
 
     #[test]
@@ -227,7 +244,12 @@ mod tests {
         let mut config = create_test_config();
         config.port = 0;
         assert!(config.validate().is_err());
-        assert!(config.validate().unwrap_err().contains("METRICS_PORT cannot be 0"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .contains("METRICS_PORT cannot be 0")
+        );
     }
 
     #[test]
@@ -235,7 +257,12 @@ mod tests {
         let mut config = create_test_config();
         config.log_level = "invalid".to_string();
         assert!(config.validate().is_err());
-        assert!(config.validate().unwrap_err().contains("LOG_LEVEL must be one of"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .contains("LOG_LEVEL must be one of")
+        );
     }
 
     #[test]
@@ -243,7 +270,7 @@ mod tests {
         let mut config = create_test_config();
         config.log_level = "INFO".to_string();
         assert!(config.validate().is_ok());
-        
+
         config.log_level = "Debug".to_string();
         assert!(config.validate().is_ok());
     }
