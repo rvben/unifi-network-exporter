@@ -69,7 +69,11 @@ impl IntegrationDevice {
             _id: self.id.clone(),
             name: self.name.clone(),
             mac: self.mac_address.clone(),
-            device_type: self.features.first().unwrap_or(&"unknown".to_string()).clone(),
+            device_type: self
+                .features
+                .first()
+                .unwrap_or(&"unknown".to_string())
+                .clone(),
             model: Some(self.model.clone()),
             version: None,
             adopted: self.state == "ONLINE",
@@ -208,7 +212,7 @@ mod tests {
             features: vec!["uap".to_string(), "wireless".to_string()],
             interfaces: vec!["eth0".to_string(), "wlan0".to_string()],
         };
-        
+
         let device = int_device.to_device();
         assert_eq!(device._id, "device123");
         assert_eq!(device.name, Some("Test AP".to_string()));
@@ -235,7 +239,7 @@ mod tests {
             features: vec![],
             interfaces: vec![],
         };
-        
+
         let device = int_device.to_device();
         assert_eq!(device.name, None);
         assert_eq!(device.device_type, "unknown");
@@ -257,7 +261,7 @@ mod tests {
                 access_type: "NORMAL".to_string(),
             },
         };
-        
+
         let client = int_client.to_client();
         assert_eq!(client._id, "client123");
         assert_eq!(client.mac, "aa:bb:cc:dd:ee:ff");
@@ -289,7 +293,7 @@ mod tests {
                 access_type: "GUEST".to_string(),
             },
         };
-        
+
         let client = int_client.to_client();
         assert_eq!(client.is_wired, false);
         assert_eq!(client.is_guest, true);
@@ -304,7 +308,7 @@ mod tests {
             internal_reference: "default".to_string(),
             name: "Default Site".to_string(),
         };
-        
+
         let site = int_site.to_site();
         assert_eq!(site._id, "88f7af54-98f8-306a-a1c7-c9349722b1f6");
         assert_eq!(site.name, "default");

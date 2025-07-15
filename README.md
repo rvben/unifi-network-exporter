@@ -31,8 +31,7 @@ Prometheus exporter for UniFi Network Controller metrics.
 docker run -d \
   -p 9897:9897 \
   -e UNIFI_CONTROLLER_URL=https://192.168.1.1:8443 \
-  -e UNIFI_USERNAME=admin \
-  -e UNIFI_PASSWORD=your-password \
+  -e UNIFI_API_KEY=your-api-key \
   rvben/unifi-network-exporter:latest
 ```
 
@@ -49,8 +48,7 @@ services:
       - "9897:9897"
     environment:
       - UNIFI_CONTROLLER_URL=https://192.168.1.1:8443
-      - UNIFI_USERNAME=admin
-      - UNIFI_PASSWORD=your-password
+      - UNIFI_API_KEY=your-api-key
       - UNIFI_SITE=default
       - VERIFY_SSL=false
 ```
@@ -64,8 +62,7 @@ tar -xzf unifi-network-exporter-x86_64-unknown-linux-gnu.tar.gz
 
 # Run the exporter
 UNIFI_CONTROLLER_URL=https://192.168.1.1:8443 \
-UNIFI_USERNAME=admin \
-UNIFI_PASSWORD=your-password \
+UNIFI_API_KEY=your-api-key \
 ./unifi-network-exporter
 ```
 
@@ -76,8 +73,9 @@ The exporter can be configured via environment variables or command-line argumen
 | Environment Variable | CLI Flag | Default | Description |
 |---------------------|----------|---------|-------------|
 | `UNIFI_CONTROLLER_URL` | `--controller-url` | *required* | UniFi Controller URL (e.g., https://192.168.1.1:8443) |
-| `UNIFI_USERNAME` | `--username` | *required* | UniFi username |
-| `UNIFI_PASSWORD` | `--password` | *required* | UniFi password |
+| `UNIFI_API_KEY` | `--api-key` | *optional* | UniFi API key (recommended) |
+| `UNIFI_USERNAME` | `--username` | *optional* | UniFi username (if no API key) |
+| `UNIFI_PASSWORD` | `--password` | *optional* | UniFi password (if no API key) |
 | `UNIFI_SITE` | `--site` | `default` | UniFi site name |
 | `METRICS_PORT` | `--port` | `9897` | Port to expose metrics on |
 | `POLL_INTERVAL` | `--poll-interval` | `30` | Poll interval in seconds |

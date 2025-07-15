@@ -57,7 +57,10 @@ impl Config {
     pub fn validate(&self) -> Result<(), String> {
         // Check that either API key or username/password is provided
         if self.api_key.is_none() && (self.username.is_none() || self.password.is_none()) {
-            return Err("Either UNIFI_API_KEY or both UNIFI_USERNAME and UNIFI_PASSWORD must be provided".to_string());
+            return Err(
+                "Either UNIFI_API_KEY or both UNIFI_USERNAME and UNIFI_PASSWORD must be provided"
+                    .to_string(),
+            );
         }
         Ok(())
     }

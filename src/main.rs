@@ -21,10 +21,10 @@ type SharedMetrics = Arc<RwLock<Metrics>>;
 async fn main() -> Result<()> {
     // Parse configuration
     let config = Config::parse();
-    
+
     // Validate configuration
     if let Err(e) = config.validate() {
-        eprintln!("Configuration error: {}", e);
+        eprintln!("Configuration error: {e}");
         std::process::exit(1);
     }
 
@@ -134,9 +134,9 @@ async fn health_handler() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::Request;
     use axum::http::StatusCode;
     use tower::ServiceExt;
-    use axum::http::Request;
 
     #[test]
     fn test_main_components() {
@@ -178,7 +178,12 @@ mod tests {
         // Test root endpoint
         let response = app
             .clone()
-            .oneshot(Request::builder().uri("/").body(axum::body::Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -186,7 +191,12 @@ mod tests {
         // Test health endpoint
         let response = app
             .clone()
-            .oneshot(Request::builder().uri("/health").body(axum::body::Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -194,14 +204,24 @@ mod tests {
         // Test metrics endpoint
         let response = app
             .clone()
-            .oneshot(Request::builder().uri("/metrics").body(axum::body::Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/metrics")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         // Test 404
         let response = app
-            .oneshot(Request::builder().uri("/nonexistent").body(axum::body::Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/nonexistent")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);

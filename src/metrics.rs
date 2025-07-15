@@ -176,7 +176,7 @@ impl Metrics {
             let version = device.version.as_deref().unwrap_or("unknown");
 
             // Device info
-            let device_info_labels = vec![
+            let device_info_labels = [
                 device._id.clone(),
                 name.to_string(),
                 device.mac.clone(),
@@ -190,7 +190,7 @@ impl Metrics {
 
             // Uptime
             if let Some(uptime) = device.uptime {
-                let uptime_labels = vec![device._id.clone(), name.to_string(), device.mac.clone()];
+                let uptime_labels = [device._id.clone(), name.to_string(), device.mac.clone()];
                 let uptime_refs: Vec<&str> = uptime_labels.iter().map(|s| s.as_str()).collect();
                 self.device_uptime
                     .with_label_values(&uptime_refs)
@@ -198,14 +198,14 @@ impl Metrics {
             }
 
             // Adoption status
-            let adopted_labels = vec![device._id.clone(), name.to_string(), device.mac.clone()];
+            let adopted_labels = [device._id.clone(), name.to_string(), device.mac.clone()];
             let adopted_refs: Vec<&str> = adopted_labels.iter().map(|s| s.as_str()).collect();
             self.device_adopted
                 .with_label_values(&adopted_refs)
                 .set(if device.adopted { 1 } else { 0 });
 
             // State
-            let state_labels = vec![device._id.clone(), name.to_string(), device.mac.clone()];
+            let state_labels = [device._id.clone(), name.to_string(), device.mac.clone()];
             let state_refs: Vec<&str> = state_labels.iter().map(|s| s.as_str()).collect();
             self.device_state
                 .with_label_values(&state_refs)
@@ -214,7 +214,7 @@ impl Metrics {
             // System stats
             if let Some(sys_stats) = &device.sys_stats {
                 if let Some(load1) = sys_stats.loadavg_1 {
-                    let cpu1_labels = vec![
+                    let cpu1_labels = [
                         device._id.clone(),
                         name.to_string(),
                         device.mac.clone(),
@@ -226,7 +226,7 @@ impl Metrics {
                         .set(load1);
                 }
                 if let Some(load5) = sys_stats.loadavg_5 {
-                    let cpu5_labels = vec![
+                    let cpu5_labels = [
                         device._id.clone(),
                         name.to_string(),
                         device.mac.clone(),
@@ -238,7 +238,7 @@ impl Metrics {
                         .set(load5);
                 }
                 if let Some(load15) = sys_stats.loadavg_15 {
-                    let cpu15_labels = vec![
+                    let cpu15_labels = [
                         device._id.clone(),
                         name.to_string(),
                         device.mac.clone(),
@@ -255,7 +255,7 @@ impl Metrics {
                     if mem_total > 0 {
                         let usage_ratio = mem_used as f64 / mem_total as f64;
                         let mem_usage_labels =
-                            vec![device._id.clone(), name.to_string(), device.mac.clone()];
+                            [device._id.clone(), name.to_string(), device.mac.clone()];
                         let mem_usage_refs: Vec<&str> =
                             mem_usage_labels.iter().map(|s| s.as_str()).collect();
                         self.device_memory_usage
@@ -263,7 +263,7 @@ impl Metrics {
                             .set(usage_ratio);
                     }
                     let mem_total_labels =
-                        vec![device._id.clone(), name.to_string(), device.mac.clone()];
+                        [device._id.clone(), name.to_string(), device.mac.clone()];
                     let mem_total_refs: Vec<&str> =
                         mem_total_labels.iter().map(|s| s.as_str()).collect();
                     self.device_memory_total
@@ -275,7 +275,7 @@ impl Metrics {
             // Traffic stats
             if let Some(stats) = &device.stat {
                 if let Some(tx_bytes) = stats.tx_bytes {
-                    let tx_bytes_labels = vec![
+                    let tx_bytes_labels = [
                         device._id.clone(),
                         name.to_string(),
                         device.mac.clone(),
@@ -288,7 +288,7 @@ impl Metrics {
                         .inc_by(tx_bytes as u64);
                 }
                 if let Some(rx_bytes) = stats.rx_bytes {
-                    let rx_bytes_labels = vec![
+                    let rx_bytes_labels = [
                         device._id.clone(),
                         name.to_string(),
                         device.mac.clone(),
@@ -301,7 +301,7 @@ impl Metrics {
                         .inc_by(rx_bytes as u64);
                 }
                 if let Some(tx_packets) = stats.tx_packets {
-                    let tx_packets_labels = vec![
+                    let tx_packets_labels = [
                         device._id.clone(),
                         name.to_string(),
                         device.mac.clone(),
@@ -314,7 +314,7 @@ impl Metrics {
                         .inc_by(tx_packets as u64);
                 }
                 if let Some(rx_packets) = stats.rx_packets {
-                    let rx_packets_labels = vec![
+                    let rx_packets_labels = [
                         device._id.clone(),
                         name.to_string(),
                         device.mac.clone(),
@@ -352,7 +352,7 @@ impl Metrics {
             let ap_mac = client.ap_mac.as_deref().unwrap_or("");
 
             // Client info
-            let client_info_labels = vec![
+            let client_info_labels = [
                 client._id.clone(),
                 client.mac.clone(),
                 hostname.to_string(),
@@ -367,7 +367,7 @@ impl Metrics {
 
             // Traffic
             if let Some(tx_bytes) = client.tx_bytes {
-                let tx_labels = vec![
+                let tx_labels = [
                     client._id.clone(),
                     client.mac.clone(),
                     hostname.to_string(),
@@ -379,7 +379,7 @@ impl Metrics {
                     .inc_by(tx_bytes as u64);
             }
             if let Some(rx_bytes) = client.rx_bytes {
-                let rx_labels = vec![
+                let rx_labels = [
                     client._id.clone(),
                     client.mac.clone(),
                     hostname.to_string(),
@@ -395,7 +395,7 @@ impl Metrics {
             if !client.is_wired {
                 if let Some(signal) = client.signal {
                     let signal_labels =
-                        vec![client._id.clone(), client.mac.clone(), hostname.to_string()];
+                        [client._id.clone(), client.mac.clone(), hostname.to_string()];
                     let signal_refs: Vec<&str> = signal_labels.iter().map(|s| s.as_str()).collect();
                     self.client_signal_strength
                         .with_label_values(&signal_refs)
@@ -405,8 +405,7 @@ impl Metrics {
 
             // Uptime
             if let Some(uptime) = client.uptime {
-                let uptime_labels =
-                    vec![client._id.clone(), client.mac.clone(), hostname.to_string()];
+                let uptime_labels = [client._id.clone(), client.mac.clone(), hostname.to_string()];
                 let uptime_refs: Vec<&str> = uptime_labels.iter().map(|s| s.as_str()).collect();
                 self.client_uptime
                     .with_label_values(&uptime_refs)
@@ -426,12 +425,12 @@ impl Metrics {
         }
 
         // Update totals
-        let wired_labels = vec!["wired".to_string(), "all".to_string(), "false".to_string()];
+        let wired_labels = ["wired".to_string(), "all".to_string(), "false".to_string()];
         let wired_refs: Vec<&str> = wired_labels.iter().map(|s| s.as_str()).collect();
         self.clients_total
             .with_label_values(&wired_refs)
             .set(wired_count);
-        let wireless_labels = vec![
+        let wireless_labels = [
             "wireless".to_string(),
             "all".to_string(),
             "false".to_string(),
@@ -440,12 +439,12 @@ impl Metrics {
         self.clients_total
             .with_label_values(&wireless_refs)
             .set(wireless_count);
-        let guest_labels = vec!["all".to_string(), "all".to_string(), "true".to_string()];
+        let guest_labels = ["all".to_string(), "all".to_string(), "true".to_string()];
         let guest_refs: Vec<&str> = guest_labels.iter().map(|s| s.as_str()).collect();
         self.clients_total
             .with_label_values(&guest_refs)
             .set(guest_count);
-        let all_labels = vec!["all".to_string(), "all".to_string(), "false".to_string()];
+        let all_labels = ["all".to_string(), "all".to_string(), "false".to_string()];
         let all_refs: Vec<&str> = all_labels.iter().map(|s| s.as_str()).collect();
         self.clients_total
             .with_label_values(&all_refs)
@@ -453,7 +452,7 @@ impl Metrics {
 
         // Per-network counts
         for (network, count) in network_counts {
-            let network_labels = vec!["all".to_string(), network.clone(), "all".to_string()];
+            let network_labels = ["all".to_string(), network.clone(), "all".to_string()];
             let network_refs: Vec<&str> = network_labels.iter().map(|s| s.as_str()).collect();
             self.clients_total
                 .with_label_values(&network_refs)
@@ -481,7 +480,7 @@ impl Metrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::unifi::{Device, Client, Site, SysStats, DeviceStats};
+    use crate::unifi::{Client, Device, DeviceStats, Site, SysStats};
 
     #[test]
     fn test_metrics_creation() {
@@ -492,10 +491,10 @@ mod tests {
     #[test]
     fn test_metrics_gather() {
         let mut metrics = Metrics::new().unwrap();
-        
+
         // First gather might be empty
         let initial_output = metrics.gather();
-        
+
         // Update with some data to ensure metrics are populated
         let devices = vec![Device {
             _id: "test".to_string(),
@@ -510,10 +509,10 @@ mod tests {
             sys_stats: None,
             stat: None,
         }];
-        
+
         metrics.update_devices(&devices);
         let output = metrics.gather();
-        
+
         // Now we should have output
         assert!(!output.is_empty() || !initial_output.is_empty());
         if !output.is_empty() {
@@ -564,31 +563,31 @@ mod tests {
                 stat: None,
             },
         ];
-        
+
         metrics.update_devices(&devices);
         let output = metrics.gather();
-        
+
         // Check device info metric
         assert!(output.contains("unifi_device_info"));
         assert!(output.contains("Test AP"));
         assert!(output.contains("UAP-AC-Pro"));
         assert!(output.contains("4.3.20"));
-        
+
         // Check uptime metric
         assert!(output.contains("unifi_device_uptime_seconds"));
         assert!(output.contains("86400"));
-        
+
         // Check adoption status
         assert!(output.contains("unifi_device_adopted"));
-        
+
         // Check CPU usage
         assert!(output.contains("unifi_device_cpu_usage"));
         assert!(output.contains("1.5"));
-        
+
         // Check memory usage
         assert!(output.contains("unifi_device_memory_usage_ratio"));
         assert!(output.contains("0.5")); // 536870912 / 1073741824 = 0.5
-        
+
         // Check bytes and packets
         assert!(output.contains("unifi_device_bytes_total"));
         assert!(output.contains("unifi_device_packets_total"));
@@ -631,24 +630,24 @@ mod tests {
                 is_guest: true,
             },
         ];
-        
+
         metrics.update_clients(&clients);
         let output = metrics.gather();
-        
+
         // Check client info metric
         assert!(output.contains("unifi_client_info"));
         assert!(output.contains("test-laptop"));
         assert!(output.contains("Test Laptop"));
         assert!(output.contains("192.168.1.100"));
-        
+
         // Check signal strength (only for wireless)
         assert!(output.contains("unifi_client_signal_strength_dbm"));
         assert!(output.contains("-65"));
-        
+
         // Check uptime
         assert!(output.contains("unifi_client_uptime_seconds"));
         assert!(output.contains("3600"));
-        
+
         // Check client counts
         assert!(output.contains("unifi_clients_total"));
         assert!(output.contains(r#"type="wireless"#));
@@ -677,10 +676,10 @@ mod tests {
                 attr_no_delete: Some(false),
             },
         ];
-        
+
         metrics.update_sites(&sites);
         let output = metrics.gather();
-        
+
         // Check sites total metric
         assert!(output.contains("unifi_sites_total"));
         assert!(output.contains("2")); // 2 sites
@@ -702,10 +701,10 @@ mod tests {
             sys_stats: None,
             stat: None,
         }];
-        
+
         metrics.update_devices(&devices);
         let output = metrics.gather();
-        
+
         // Should handle missing values gracefully
         assert!(output.contains("unifi_device_info"));
         assert!(output.contains("unknown")); // Default for missing name/model/version
@@ -733,10 +732,10 @@ mod tests {
             }),
             stat: None,
         }];
-        
+
         metrics.update_devices(&devices);
         let output = metrics.gather();
-        
+
         // Should calculate memory usage ratio correctly
         assert!(output.contains("unifi_device_memory_usage_ratio"));
         assert!(output.contains("0.75")); // 750/1000 = 0.75
@@ -798,13 +797,22 @@ mod tests {
                 is_guest: false,
             },
         ];
-        
+
         metrics.update_clients(&clients);
         let output = metrics.gather();
-        
+
         // Verify counts are correct
-        assert!(output.contains(r#"unifi_clients_total{is_guest="false",network="all",type="wired"} 1"#));
-        assert!(output.contains(r#"unifi_clients_total{is_guest="false",network="all",type="wireless"} 2"#));
-        assert!(output.contains(r#"unifi_clients_total{is_guest="true",network="all",type="all"} 1"#));
+        assert!(
+            output
+                .contains(r#"unifi_clients_total{is_guest="false",network="all",type="wired"} 1"#)
+        );
+        assert!(
+            output.contains(
+                r#"unifi_clients_total{is_guest="false",network="all",type="wireless"} 2"#
+            )
+        );
+        assert!(
+            output.contains(r#"unifi_clients_total{is_guest="true",network="all",type="all"} 1"#)
+        );
     }
 }

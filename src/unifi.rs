@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use reqwest::header::{COOKIE, HeaderMap, HeaderValue, ACCEPT};
+use reqwest::header::{ACCEPT, COOKIE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,7 +7,9 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-use crate::unifi_integration::{IntegrationResponse, IntegrationDevice, IntegrationClient, IntegrationSite};
+use crate::unifi_integration::{
+    IntegrationClient, IntegrationDevice, IntegrationResponse, IntegrationSite,
+};
 
 #[derive(Error, Debug)]
 pub enum UniFiError {
@@ -151,7 +153,9 @@ impl UniFiClient {
                 password: pass,
             }
         } else {
-            return Err(anyhow!("Either API key or username/password must be provided"));
+            return Err(anyhow!(
+                "Either API key or username/password must be provided"
+            ));
         };
 
         Ok(Self {
@@ -226,15 +230,24 @@ impl UniFiClient {
     {
         let url = match &self.auth_method {
             AuthMethod::ApiKey(_) => {
-                // API key uses different URL pattern  
-                format!("{}/proxy/network/integration/v1/{}", self.base_url, path.trim_start_matches('/'))
+                // API key uses different URL pattern
+                format!(
+                    "{}/proxy/network/integration/v1/{}",
+                    self.base_url,
+                    path.trim_start_matches('/')
+                )
             }
             AuthMethod::UserPass { .. } => {
                 // Cookie auth uses traditional API path
-                format!("{}/api/s/{}/{}", self.base_url, self.site, path.trim_start_matches('/'))
+                format!(
+                    "{}/api/s/{}/{}",
+                    self.base_url,
+                    self.site,
+                    path.trim_start_matches('/')
+                )
             }
         };
-        
+
         debug!("Making request to: {}", url);
 
         let mut headers = HeaderMap::new();
@@ -273,7 +286,8 @@ impl UniFiClient {
                 return Err(UniFiError::ParseError(format!(
                     "API request failed with status: {}",
                     response.status()
-                )).into());
+                ))
+                .into());
             }
 
             let api_response: ApiResponse<T> = response.json().await?;
@@ -285,7 +299,8 @@ impl UniFiClient {
             Err(UniFiError::ParseError(format!(
                 "API request failed with status: {}",
                 response.status()
-            )).into())
+            ))
+            .into())
         }
     }
 
@@ -294,33 +309,38 @@ impl UniFiClient {
             AuthMethod::ApiKey(_) => {
                 // First get the site ID
                 let sites = self.get_sites().await?;
-                let site = sites.iter()
+                let site = sites
+                    .iter()
                     .find(|s| s.name == self.site || s.desc == self.site)
                     .ok_or_else(|| anyhow!("Site '{}' not found", self.site))?;
-                
-                let url = format!("{}/proxy/network/integration/v1/sites/{}/devices", 
-                    self.base_url, site._id);
-                
+
+                let url = format!(
+                    "{}/proxy/network/integration/v1/sites/{}/devices",
+                    self.base_url, site._id
+                );
+
                 debug!("Making request to: {}", url);
-                
+
                 let mut headers = HeaderMap::new();
                 headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
                 if let AuthMethod::ApiKey(key) = &self.auth_method {
                     headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
                 }
-                
+
                 let response = self.client.get(&url).headers(headers).send().await?;
-                
+
                 if !response.status().is_success() {
                     return Err(anyhow!("API request failed: {}", response.status()));
                 }
-                
+
                 let api_response: IntegrationResponse<IntegrationDevice> = response.json().await?;
-                Ok(api_response.data.into_iter().map(|d| d.to_device()).collect())
+                Ok(api_response
+                    .data
+                    .into_iter()
+                    .map(|d| d.to_device())
+                    .collect())
             }
-            AuthMethod::UserPass { .. } => {
-                self.get_legacy("stat/device").await
-            }
+            AuthMethod::UserPass { .. } => self.get_legacy("stat/device").await,
         }
     }
 
@@ -329,33 +349,38 @@ impl UniFiClient {
             AuthMethod::ApiKey(_) => {
                 // First get the site ID
                 let sites = self.get_sites().await?;
-                let site = sites.iter()
+                let site = sites
+                    .iter()
                     .find(|s| s.name == self.site || s.desc == self.site)
                     .ok_or_else(|| anyhow!("Site '{}' not found", self.site))?;
-                
-                let url = format!("{}/proxy/network/integration/v1/sites/{}/clients", 
-                    self.base_url, site._id);
-                
+
+                let url = format!(
+                    "{}/proxy/network/integration/v1/sites/{}/clients",
+                    self.base_url, site._id
+                );
+
                 debug!("Making request to: {}", url);
-                
+
                 let mut headers = HeaderMap::new();
                 headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
                 if let AuthMethod::ApiKey(key) = &self.auth_method {
                     headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
                 }
-                
+
                 let response = self.client.get(&url).headers(headers).send().await?;
-                
+
                 if !response.status().is_success() {
                     return Err(anyhow!("API request failed: {}", response.status()));
                 }
-                
+
                 let api_response: IntegrationResponse<IntegrationClient> = response.json().await?;
-                Ok(api_response.data.into_iter().map(|c| c.to_client()).collect())
+                Ok(api_response
+                    .data
+                    .into_iter()
+                    .map(|c| c.to_client())
+                    .collect())
             }
-            AuthMethod::UserPass { .. } => {
-                self.get_legacy("stat/sta").await
-            }
+            AuthMethod::UserPass { .. } => self.get_legacy("stat/sta").await,
         }
     }
 
@@ -363,27 +388,25 @@ impl UniFiClient {
         match &self.auth_method {
             AuthMethod::ApiKey(_) => {
                 let url = format!("{}/proxy/network/integration/v1/sites", self.base_url);
-                
+
                 debug!("Making request to: {}", url);
-                
+
                 let mut headers = HeaderMap::new();
                 headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
                 if let AuthMethod::ApiKey(key) = &self.auth_method {
                     headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
                 }
-                
+
                 let response = self.client.get(&url).headers(headers).send().await?;
-                
+
                 if !response.status().is_success() {
                     return Err(anyhow!("API request failed: {}", response.status()));
                 }
-                
+
                 let api_response: IntegrationResponse<IntegrationSite> = response.json().await?;
                 Ok(api_response.data.into_iter().map(|s| s.to_site()).collect())
             }
-            AuthMethod::UserPass { .. } => {
-                self.get_legacy("/self/sites").await
-            }
+            AuthMethod::UserPass { .. } => self.get_legacy("/self/sites").await,
         }
     }
 }
@@ -436,7 +459,10 @@ mod tests {
         );
         assert!(client.is_err());
         let err = client.err().unwrap();
-        assert!(err.to_string().contains("Either API key or username/password must be provided"));
+        assert!(
+            err.to_string()
+                .contains("Either API key or username/password must be provided")
+        );
     }
 
     #[test]
@@ -586,7 +612,7 @@ mod tests {
             false,
         )
         .unwrap();
-        
+
         // API key auth should always succeed without network call
         let result = client.ensure_authenticated().await;
         assert!(result.is_ok());
