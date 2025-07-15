@@ -1,8 +1,5 @@
 # Build stage
-FROM rust:1.88-alpine AS builder
-
-# Install build dependencies
-RUN apk add --no-cache musl-dev
+FROM rust:1.88 AS builder
 
 # Create app directory
 WORKDIR /app
@@ -17,14 +14,16 @@ COPY src ./src
 RUN cargo build --release
 
 # Runtime stage
-FROM alpine:3.21
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -g 1000 -S appuser && \
-    adduser -u 1000 -S appuser -G appuser
+RUN groupadd -r -g 1000 appuser && \
+    useradd -r -u 1000 -g appuser appuser
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/unifi-network-exporter /usr/local/bin/unifi-network-exporter
