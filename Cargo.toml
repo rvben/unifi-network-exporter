@@ -39,7 +39,7 @@ thiserror = "2.0"
 base64 = "0.22"
 
 # Cookie support
-cookie = "0.19"
+cookie = "0.18"
 
 [dev-dependencies]
 # HTTP testing
@@ -47,3 +47,4 @@ tower = "0.5"
 hyper = "1.0"
 tower-service = "0.3"
 wiremock = "0.6"
+mockito = "1.7"

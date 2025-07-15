@@ -8,13 +8,17 @@ pub struct Config {
     #[arg(long, env = "UNIFI_CONTROLLER_URL")]
     pub controller_url: String,
 
-    /// UniFi username
-    #[arg(long, env = "UNIFI_USERNAME")]
-    pub username: String,
+    /// UniFi API key (use either API key or username/password)
+    #[arg(long, env = "UNIFI_API_KEY")]
+    pub api_key: Option<String>,
 
-    /// UniFi password
+    /// UniFi Controller username (required if API key not provided)
+    #[arg(long, env = "UNIFI_USERNAME")]
+    pub username: Option<String>,
+
+    /// UniFi Controller password (required if API key not provided)
     #[arg(long, env = "UNIFI_PASSWORD")]
-    pub password: String,
+    pub password: Option<String>,
 
     /// UniFi site name (default: 'default')
     #[arg(long, env = "UNIFI_SITE", default_value = "default")]
@@ -49,18 +53,91 @@ impl Config {
     pub fn http_timeout_duration(&self) -> Duration {
         Duration::from_secs(self.http_timeout)
     }
+
+    pub fn validate(&self) -> Result<(), String> {
+        // Check that either API key or username/password is provided
+        if self.api_key.is_none() && (self.username.is_none() || self.password.is_none()) {
+            return Err("Either UNIFI_API_KEY or both UNIFI_USERNAME and UNIFI_PASSWORD must be provided".to_string());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn create_test_config() -> Config {
+        Config {
+            controller_url: "https://192.168.1.1:8443".to_string(),
+            api_key: None,
+            username: Some("admin".to_string()),
+            password: Some("password".to_string()),
+            site: "default".to_string(),
+            port: 9897,
+            poll_interval: 30,
+            log_level: "info".to_string(),
+            http_timeout: 10,
+            verify_ssl: true,
+        }
+    }
+
     #[test]
     fn test_poll_interval_duration() {
+        let config = create_test_config();
+        assert_eq!(config.poll_interval_duration(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_http_timeout_duration() {
+        let mut config = create_test_config();
+        config.http_timeout = 15;
+        assert_eq!(config.http_timeout_duration(), Duration::from_secs(15));
+    }
+
+    #[test]
+    fn test_validate_with_api_key() {
+        let mut config = create_test_config();
+        config.api_key = Some("test-api-key".to_string());
+        config.username = None;
+        config.password = None;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_with_username_password() {
+        let config = create_test_config();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_missing_auth() {
+        let mut config = create_test_config();
+        config.api_key = None;
+        config.username = None;
+        config.password = None;
+        assert!(config.validate().is_err());
+        assert_eq!(
+            config.validate().unwrap_err(),
+            "Either UNIFI_API_KEY or both UNIFI_USERNAME and UNIFI_PASSWORD must be provided"
+        );
+    }
+
+    #[test]
+    fn test_validate_missing_password() {
+        let mut config = create_test_config();
+        config.api_key = None;
+        config.password = None;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_default_values() {
         let config = Config {
-            controller_url: "https://192.168.1.1:8443".to_string(),
-            username: "admin".to_string(),
-            password: "password".to_string(),
+            controller_url: "https://test.local".to_string(),
+            api_key: Some("key".to_string()),
+            username: None,
+            password: None,
             site: "default".to_string(),
             port: 9897,
             poll_interval: 30,
@@ -68,22 +145,11 @@ mod tests {
             http_timeout: 10,
             verify_ssl: true,
         };
-        assert_eq!(config.poll_interval_duration(), Duration::from_secs(30));
-    }
-
-    #[test]
-    fn test_http_timeout_duration() {
-        let config = Config {
-            controller_url: "https://192.168.1.1:8443".to_string(),
-            username: "admin".to_string(),
-            password: "password".to_string(),
-            site: "default".to_string(),
-            port: 9897,
-            poll_interval: 30,
-            log_level: "info".to_string(),
-            http_timeout: 15,
-            verify_ssl: true,
-        };
-        assert_eq!(config.http_timeout_duration(), Duration::from_secs(15));
+        assert_eq!(config.site, "default");
+        assert_eq!(config.port, 9897);
+        assert_eq!(config.poll_interval, 30);
+        assert_eq!(config.log_level, "info");
+        assert_eq!(config.http_timeout, 10);
+        assert_eq!(config.verify_ssl, true);
     }
 }

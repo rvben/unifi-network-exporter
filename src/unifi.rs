@@ -1,11 +1,13 @@
-use anyhow::{anyhow, Result};
-use cookie::Cookie;
-use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
+use anyhow::{Result, anyhow};
+use reqwest::header::{COOKIE, HeaderMap, HeaderValue, ACCEPT};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::RwLock;
+use tracing::debug;
+
+use crate::unifi_integration::{IntegrationResponse, IntegrationDevice, IntegrationClient, IntegrationSite};
 
 #[derive(Error, Debug)]
 pub enum UniFiError {
@@ -27,12 +29,14 @@ struct LoginRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct LoginResponse {
     meta: Meta,
     data: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct Meta {
     rc: String,
 }
@@ -58,11 +62,12 @@ pub struct SysStats {
     pub loadavg_1: Option<f64>,
     pub loadavg_5: Option<f64>,
     pub loadavg_15: Option<f64>,
-    pub mem_used: Option<i64>,
     pub mem_total: Option<i64>,
+    pub mem_used: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct DeviceStats {
     pub bytes: Option<i64>,
     pub tx_bytes: Option<i64>,
@@ -72,24 +77,26 @@ pub struct DeviceStats {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct Client {
     pub _id: String,
     pub mac: String,
+    pub ip: Option<String>,
     pub hostname: Option<String>,
     pub name: Option<String>,
-    pub ip: Option<String>,
-    pub is_wired: bool,
-    pub is_guest: bool,
     pub network: Option<String>,
     pub vlan: Option<i32>,
-    pub rx_bytes: Option<i64>,
-    pub tx_bytes: Option<i64>,
-    pub signal: Option<i32>,
-    pub uptime: Option<i64>,
     pub ap_mac: Option<String>,
+    pub signal: Option<i32>,
+    pub tx_bytes: Option<i64>,
+    pub rx_bytes: Option<i64>,
+    pub uptime: Option<i64>,
+    pub is_wired: bool,
+    pub is_guest: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct Site {
     pub _id: String,
     pub name: String,
@@ -99,16 +106,22 @@ pub struct Site {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ApiResponse<T> {
     meta: Meta,
     data: Vec<T>,
 }
 
+#[derive(Clone)]
+enum AuthMethod {
+    ApiKey(String),
+    UserPass { username: String, password: String },
+}
+
 pub struct UniFiClient {
     client: reqwest::Client,
     base_url: String,
-    username: String,
-    password: String,
+    auth_method: AuthMethod,
     site: String,
     auth_cookies: Arc<RwLock<Option<String>>>,
 }
@@ -116,8 +129,9 @@ pub struct UniFiClient {
 impl UniFiClient {
     pub fn new(
         base_url: String,
-        username: String,
-        password: String,
+        api_key: Option<String>,
+        username: Option<String>,
+        password: Option<String>,
         site: String,
         timeout: Duration,
         verify_ssl: bool,
@@ -128,99 +142,140 @@ impl UniFiClient {
             .cookie_store(true)
             .build()?;
 
+        // Determine auth method
+        let auth_method = if let Some(key) = api_key {
+            AuthMethod::ApiKey(key)
+        } else if let (Some(user), Some(pass)) = (username, password) {
+            AuthMethod::UserPass {
+                username: user,
+                password: pass,
+            }
+        } else {
+            return Err(anyhow!("Either API key or username/password must be provided"));
+        };
+
         Ok(Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
-            username,
-            password,
+            auth_method,
             site,
             auth_cookies: Arc::new(RwLock::new(None)),
         })
     }
 
     pub async fn ensure_authenticated(&self) -> Result<()> {
-        let cookies = self.auth_cookies.read().await;
-        if cookies.is_some() {
-            return Ok(());
+        match &self.auth_method {
+            AuthMethod::ApiKey(_) => Ok(()), // API key doesn't need login
+            AuthMethod::UserPass { .. } => {
+                let cookies = self.auth_cookies.read().await;
+                if cookies.is_some() {
+                    return Ok(());
+                }
+                drop(cookies);
+                self.login().await
+            }
         }
-        drop(cookies);
-
-        self.login().await
     }
 
     async fn login(&self) -> Result<()> {
-        let login_url = format!("{}/api/login", self.base_url);
-        let login_data = LoginRequest {
-            username: self.username.clone(),
-            password: self.password.clone(),
-            remember: false,
-        };
+        match &self.auth_method {
+            AuthMethod::ApiKey(_) => Ok(()), // No login needed for API key
+            AuthMethod::UserPass { username, password } => {
+                let login_url = format!("{}/api/login", self.base_url);
+                let login_data = LoginRequest {
+                    username: username.clone(),
+                    password: password.clone(),
+                    remember: false,
+                };
 
-        let response = self
-            .client
-            .post(&login_url)
-            .json(&login_data)
-            .send()
-            .await?;
+                let response = self
+                    .client
+                    .post(&login_url)
+                    .json(&login_data)
+                    .send()
+                    .await?;
 
-        if !response.status().is_success() {
-            return Err(anyhow!("Login failed with status: {}", response.status()));
+                if !response.status().is_success() {
+                    return Err(anyhow!("Login failed with status: {}", response.status()));
+                }
+
+                // Extract cookies from response
+                let cookies: Vec<String> = response
+                    .headers()
+                    .get_all("set-cookie")
+                    .iter()
+                    .filter_map(|value| value.to_str().ok())
+                    .map(|s| s.to_string())
+                    .collect();
+
+                if cookies.is_empty() {
+                    return Err(anyhow!("No cookies received from login response"));
+                }
+
+                let cookie_string = cookies.join("; ");
+                *self.auth_cookies.write().await = Some(cookie_string);
+
+                Ok(())
+            }
         }
-
-        // Extract cookies from response
-        let cookies: Vec<String> = response
-            .headers()
-            .get_all("set-cookie")
-            .iter()
-            .filter_map(|value| value.to_str().ok())
-            .map(|s| s.to_string())
-            .collect();
-
-        if cookies.is_empty() {
-            return Err(anyhow!("No authentication cookies received"));
-        }
-
-        // Store cookies for future requests
-        let cookie_string = cookies.join("; ");
-        let mut auth_cookies = self.auth_cookies.write().await;
-        *auth_cookies = Some(cookie_string);
-
-        Ok(())
     }
 
-    async fn make_request<T: for<'de> Deserialize<'de>>(
-        &self,
-        endpoint: &str,
-    ) -> Result<Vec<T>, UniFiError> {
-        let url = format!("{}/api/s/{}/{}", self.base_url, self.site, endpoint);
+    async fn get_legacy<T>(&self, path: &str) -> Result<Vec<T>>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let url = match &self.auth_method {
+            AuthMethod::ApiKey(_) => {
+                // API key uses different URL pattern  
+                format!("{}/proxy/network/integration/v1/{}", self.base_url, path.trim_start_matches('/'))
+            }
+            AuthMethod::UserPass { .. } => {
+                // Cookie auth uses traditional API path
+                format!("{}/api/s/{}/{}", self.base_url, self.site, path.trim_start_matches('/'))
+            }
+        };
+        
+        debug!("Making request to: {}", url);
 
         let mut headers = HeaderMap::new();
-        if let Some(cookies) = &*self.auth_cookies.read().await {
-            headers.insert(COOKIE, HeaderValue::from_str(cookies).unwrap());
+        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+
+        match &self.auth_method {
+            AuthMethod::ApiKey(key) => {
+                headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
+            }
+            AuthMethod::UserPass { .. } => {
+                if let Some(cookies) = &*self.auth_cookies.read().await {
+                    headers.insert(COOKIE, HeaderValue::from_str(cookies).unwrap());
+                }
+            }
         }
 
         let response = self.client.get(&url).headers(headers).send().await?;
 
-        if response.status() == 401 {
+        if response.status() == 401 && matches!(&self.auth_method, AuthMethod::UserPass { .. }) {
             // Try to re-authenticate
             drop(self.auth_cookies.write().await.take());
-            self.login().await.map_err(|_| UniFiError::AuthenticationFailed)?;
-            
+            self.login()
+                .await
+                .map_err(|_| UniFiError::AuthenticationFailed)?;
+
             // Retry request
             let mut headers = HeaderMap::new();
+            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
             if let Some(cookies) = &*self.auth_cookies.read().await {
                 headers.insert(COOKIE, HeaderValue::from_str(cookies).unwrap());
             }
-            
+
             let response = self.client.get(&url).headers(headers).send().await?;
-            
+
             if !response.status().is_success() {
                 return Err(UniFiError::ParseError(format!(
                     "API request failed with status: {}",
                     response.status()
-                )));
+                )).into());
             }
-            
+
             let api_response: ApiResponse<T> = response.json().await?;
             Ok(api_response.data)
         } else if response.status().is_success() {
@@ -230,38 +285,106 @@ impl UniFiClient {
             Err(UniFiError::ParseError(format!(
                 "API request failed with status: {}",
                 response.status()
-            )))
+            )).into())
         }
     }
 
-    pub async fn fetch_devices(&self) -> Result<Vec<Device>, UniFiError> {
-        self.make_request("stat/device").await
+    pub async fn get_devices(&self) -> Result<Vec<Device>> {
+        match &self.auth_method {
+            AuthMethod::ApiKey(_) => {
+                // First get the site ID
+                let sites = self.get_sites().await?;
+                let site = sites.iter()
+                    .find(|s| s.name == self.site || s.desc == self.site)
+                    .ok_or_else(|| anyhow!("Site '{}' not found", self.site))?;
+                
+                let url = format!("{}/proxy/network/integration/v1/sites/{}/devices", 
+                    self.base_url, site._id);
+                
+                debug!("Making request to: {}", url);
+                
+                let mut headers = HeaderMap::new();
+                headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+                if let AuthMethod::ApiKey(key) = &self.auth_method {
+                    headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
+                }
+                
+                let response = self.client.get(&url).headers(headers).send().await?;
+                
+                if !response.status().is_success() {
+                    return Err(anyhow!("API request failed: {}", response.status()));
+                }
+                
+                let api_response: IntegrationResponse<IntegrationDevice> = response.json().await?;
+                Ok(api_response.data.into_iter().map(|d| d.to_device()).collect())
+            }
+            AuthMethod::UserPass { .. } => {
+                self.get_legacy("stat/device").await
+            }
+        }
     }
 
-    pub async fn fetch_clients(&self) -> Result<Vec<Client>, UniFiError> {
-        self.make_request("stat/sta").await
+    pub async fn get_clients(&self) -> Result<Vec<Client>> {
+        match &self.auth_method {
+            AuthMethod::ApiKey(_) => {
+                // First get the site ID
+                let sites = self.get_sites().await?;
+                let site = sites.iter()
+                    .find(|s| s.name == self.site || s.desc == self.site)
+                    .ok_or_else(|| anyhow!("Site '{}' not found", self.site))?;
+                
+                let url = format!("{}/proxy/network/integration/v1/sites/{}/clients", 
+                    self.base_url, site._id);
+                
+                debug!("Making request to: {}", url);
+                
+                let mut headers = HeaderMap::new();
+                headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+                if let AuthMethod::ApiKey(key) = &self.auth_method {
+                    headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
+                }
+                
+                let response = self.client.get(&url).headers(headers).send().await?;
+                
+                if !response.status().is_success() {
+                    return Err(anyhow!("API request failed: {}", response.status()));
+                }
+                
+                let api_response: IntegrationResponse<IntegrationClient> = response.json().await?;
+                Ok(api_response.data.into_iter().map(|c| c.to_client()).collect())
+            }
+            AuthMethod::UserPass { .. } => {
+                self.get_legacy("stat/sta").await
+            }
+        }
     }
 
-    pub async fn fetch_sites(&self) -> Result<Vec<Site>, UniFiError> {
-        // Sites endpoint is at the root level, not under a specific site
-        let url = format!("{}/api/self/sites", self.base_url);
-
-        let mut headers = HeaderMap::new();
-        if let Some(cookies) = &*self.auth_cookies.read().await {
-            headers.insert(COOKIE, HeaderValue::from_str(cookies).unwrap());
+    pub async fn get_sites(&self) -> Result<Vec<Site>> {
+        match &self.auth_method {
+            AuthMethod::ApiKey(_) => {
+                let url = format!("{}/proxy/network/integration/v1/sites", self.base_url);
+                
+                debug!("Making request to: {}", url);
+                
+                let mut headers = HeaderMap::new();
+                headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+                if let AuthMethod::ApiKey(key) = &self.auth_method {
+                    headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
+                }
+                
+                let response = self.client.get(&url).headers(headers).send().await?;
+                
+                if !response.status().is_success() {
+                    return Err(anyhow!("API request failed: {}", response.status()));
+                }
+                
+                let api_response: IntegrationResponse<IntegrationSite> = response.json().await?;
+                Ok(api_response.data.into_iter().map(|s| s.to_site()).collect())
+            }
+            AuthMethod::UserPass { .. } => {
+                self.get_legacy("/self/sites").await
+            }
         }
-
-        let response = self.client.get(&url).headers(headers).send().await?;
-
-        if !response.status().is_success() {
-            return Err(UniFiError::ParseError(format!(
-                "Sites request failed with status: {}",
-                response.status()
-            )));
-        }
-
-        let api_response: ApiResponse<Site> = response.json().await?;
-        Ok(api_response.data)
     }
 }
 
@@ -270,21 +393,202 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_unifi_client_creation() {
+    fn test_unifi_client_creation_with_api_key() {
         let client = UniFiClient::new(
             "https://192.168.1.1:8443".to_string(),
-            "admin".to_string(),
-            "password".to_string(),
+            Some("test-api-key".to_string()),
+            None,
+            None,
             "default".to_string(),
             Duration::from_secs(10),
-            true,
+            false,
         );
         assert!(client.is_ok());
+        let client = client.unwrap();
+        assert_eq!(client.site, "default");
+        assert_eq!(client.base_url, "https://192.168.1.1:8443");
+    }
+
+    #[test]
+    fn test_unifi_client_creation_with_username_password() {
+        let client = UniFiClient::new(
+            "https://192.168.1.1:8443".to_string(),
+            None,
+            Some("admin".to_string()),
+            Some("password".to_string()),
+            "default".to_string(),
+            Duration::from_secs(10),
+            false,
+        );
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_unifi_client_creation_missing_auth() {
+        let client = UniFiClient::new(
+            "https://192.168.1.1:8443".to_string(),
+            None,
+            None,
+            None,
+            "default".to_string(),
+            Duration::from_secs(10),
+            false,
+        );
+        assert!(client.is_err());
+        let err = client.err().unwrap();
+        assert!(err.to_string().contains("Either API key or username/password must be provided"));
+    }
+
+    #[test]
+    fn test_unifi_client_strips_trailing_slash() {
+        let client = UniFiClient::new(
+            "https://192.168.1.1:8443/".to_string(),
+            Some("test-api-key".to_string()),
+            None,
+            None,
+            "default".to_string(),
+            Duration::from_secs(10),
+            false,
+        )
+        .unwrap();
+        assert_eq!(client.base_url, "https://192.168.1.1:8443");
     }
 
     #[test]
     fn test_unifi_error_display() {
         let error = UniFiError::AuthenticationFailed;
         assert_eq!(error.to_string(), "Authentication failed");
+
+        let error = UniFiError::ParseError("Invalid JSON".to_string());
+        assert_eq!(error.to_string(), "Failed to parse response: Invalid JSON");
+    }
+
+    #[test]
+    fn test_device_deserialize() {
+        let json = r#"{
+            "_id": "device123",
+            "name": "Test AP",
+            "mac": "00:11:22:33:44:55",
+            "type": "uap",
+            "model": "UAP-AC-Pro",
+            "version": "4.3.20",
+            "adopted": true,
+            "state": 1,
+            "uptime": 86400
+        }"#;
+        let device: Device = serde_json::from_str(json).unwrap();
+        assert_eq!(device._id, "device123");
+        assert_eq!(device.name, Some("Test AP".to_string()));
+        assert_eq!(device.mac, "00:11:22:33:44:55");
+        assert_eq!(device.device_type, "uap");
+        assert_eq!(device.model, Some("UAP-AC-Pro".to_string()));
+        assert_eq!(device.version, Some("4.3.20".to_string()));
+        assert_eq!(device.adopted, true);
+        assert_eq!(device.state, 1);
+        assert_eq!(device.uptime, Some(86400));
+    }
+
+    #[test]
+    fn test_client_deserialize() {
+        let json = r#"{
+            "_id": "client123",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "ip": "192.168.1.100",
+            "hostname": "test-laptop",
+            "name": "Test Laptop",
+            "network": "LAN",
+            "vlan": 10,
+            "ap_mac": "00:11:22:33:44:55",
+            "signal": -65,
+            "tx_bytes": 1024000,
+            "rx_bytes": 2048000,
+            "uptime": 3600,
+            "is_wired": false,
+            "is_guest": false
+        }"#;
+        let client: Client = serde_json::from_str(json).unwrap();
+        assert_eq!(client._id, "client123");
+        assert_eq!(client.mac, "aa:bb:cc:dd:ee:ff");
+        assert_eq!(client.ip, Some("192.168.1.100".to_string()));
+        assert_eq!(client.hostname, Some("test-laptop".to_string()));
+        assert_eq!(client.name, Some("Test Laptop".to_string()));
+        assert_eq!(client.network, Some("LAN".to_string()));
+        assert_eq!(client.vlan, Some(10));
+        assert_eq!(client.ap_mac, Some("00:11:22:33:44:55".to_string()));
+        assert_eq!(client.signal, Some(-65));
+        assert_eq!(client.tx_bytes, Some(1024000));
+        assert_eq!(client.rx_bytes, Some(2048000));
+        assert_eq!(client.uptime, Some(3600));
+        assert_eq!(client.is_wired, false);
+        assert_eq!(client.is_guest, false);
+    }
+
+    #[test]
+    fn test_site_deserialize() {
+        let json = r#"{
+            "_id": "site123",
+            "name": "default",
+            "desc": "Default Site",
+            "attr_hidden_id": "hidden123",
+            "attr_no_delete": true
+        }"#;
+        let site: Site = serde_json::from_str(json).unwrap();
+        assert_eq!(site._id, "site123");
+        assert_eq!(site.name, "default");
+        assert_eq!(site.desc, "Default Site");
+        assert_eq!(site.attr_hidden_id, Some("hidden123".to_string()));
+        assert_eq!(site.attr_no_delete, Some(true));
+    }
+
+    #[test]
+    fn test_sys_stats_deserialize() {
+        let json = r#"{
+            "loadavg_1": 1.5,
+            "loadavg_5": 1.2,
+            "loadavg_15": 1.0,
+            "mem_total": 1073741824,
+            "mem_used": 536870912
+        }"#;
+        let stats: SysStats = serde_json::from_str(json).unwrap();
+        assert_eq!(stats.loadavg_1, Some(1.5));
+        assert_eq!(stats.loadavg_5, Some(1.2));
+        assert_eq!(stats.loadavg_15, Some(1.0));
+        assert_eq!(stats.mem_total, Some(1073741824));
+        assert_eq!(stats.mem_used, Some(536870912));
+    }
+
+    #[test]
+    fn test_device_stats_deserialize() {
+        let json = r#"{
+            "bytes": 3072000,
+            "tx_bytes": 1024000,
+            "rx_bytes": 2048000,
+            "tx_packets": 1000,
+            "rx_packets": 2000
+        }"#;
+        let stats: DeviceStats = serde_json::from_str(json).unwrap();
+        assert_eq!(stats.bytes, Some(3072000));
+        assert_eq!(stats.tx_bytes, Some(1024000));
+        assert_eq!(stats.rx_bytes, Some(2048000));
+        assert_eq!(stats.tx_packets, Some(1000));
+        assert_eq!(stats.rx_packets, Some(2000));
+    }
+
+    #[tokio::test]
+    async fn test_ensure_authenticated_with_api_key() {
+        let client = UniFiClient::new(
+            "https://192.168.1.1:8443".to_string(),
+            Some("test-api-key".to_string()),
+            None,
+            None,
+            "default".to_string(),
+            Duration::from_secs(10),
+            false,
+        )
+        .unwrap();
+        
+        // API key auth should always succeed without network call
+        let result = client.ensure_authenticated().await;
+        assert!(result.is_ok());
     }
 }

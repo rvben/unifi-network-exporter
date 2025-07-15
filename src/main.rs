@@ -1,5 +1,5 @@
 use anyhow::Result;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use clap::Parser;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -9,6 +9,7 @@ use tracing::{error, info};
 mod config;
 mod metrics;
 mod unifi;
+mod unifi_integration;
 
 use config::Config;
 use metrics::Metrics;
@@ -20,6 +21,12 @@ type SharedMetrics = Arc<RwLock<Metrics>>;
 async fn main() -> Result<()> {
     // Parse configuration
     let config = Config::parse();
+    
+    // Validate configuration
+    if let Err(e) = config.validate() {
+        eprintln!("Configuration error: {}", e);
+        std::process::exit(1);
+    }
 
     // Initialize logging
     tracing_subscriber::fmt()
@@ -31,6 +38,7 @@ async fn main() -> Result<()> {
     // Create UniFi client
     let client = UniFiClient::new(
         config.controller_url.clone(),
+        config.api_key.clone(),
         config.username.clone(),
         config.password.clone(),
         config.site.clone(),
@@ -63,22 +71,30 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Start polling loop
-    let poll_interval = config.poll_interval_duration();
-    let mut interval = tokio::time::interval(poll_interval);
+    // Start polling loop in a separate task
+    let poll_metrics = metrics.clone();
+    let poll_handle = tokio::spawn(async move {
+        let poll_interval = config.poll_interval_duration();
+        let mut interval = tokio::time::interval(poll_interval);
 
-    loop {
-        interval.tick().await;
+        loop {
+            interval.tick().await;
 
-        info!("Polling UniFi Controller");
+            info!("Polling UniFi Controller");
 
-        match poll_unifi_data(&client, &metrics).await {
-            Ok(_) => info!("Successfully updated metrics"),
-            Err(e) => error!("Failed to poll UniFi data: {}", e),
+            match poll_unifi_data(&client, &poll_metrics).await {
+                Ok(_) => info!("Successfully updated metrics"),
+                Err(e) => error!("Failed to poll UniFi data: {}", e),
+            }
         }
+    });
+
+    // Wait for both tasks
+    tokio::select! {
+        _ = server => error!("Server task ended unexpectedly"),
+        _ = poll_handle => error!("Polling task ended unexpectedly"),
     }
 
-    server.await?;
     Ok(())
 }
 
@@ -87,9 +103,9 @@ async fn poll_unifi_data(client: &UniFiClient, metrics: &SharedMetrics) -> Resul
     client.ensure_authenticated().await?;
 
     // Fetch data from UniFi
-    let devices = client.fetch_devices().await?;
-    let clients = client.fetch_clients().await?;
-    let sites = client.fetch_sites().await?;
+    let devices = client.get_devices().await?;
+    let clients = client.get_clients().await?;
+    let sites = client.get_sites().await?;
 
     // Update metrics
     let mut metrics = metrics.write().await;
@@ -118,10 +134,76 @@ async fn health_handler() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
+    use tower::ServiceExt;
+    use axum::http::Request;
 
     #[test]
     fn test_main_components() {
         // Test that main components are properly defined
         assert!(true);
+    }
+
+    #[tokio::test]
+    async fn test_root_handler() {
+        let response = root_handler().await;
+        assert!(response.contains("UniFi Network Exporter"));
+        assert!(response.contains("/metrics"));
+        assert!(response.contains("/health"));
+    }
+
+    #[tokio::test]
+    async fn test_health_handler() {
+        let response = health_handler().await;
+        assert_eq!(response, "OK");
+    }
+
+    #[tokio::test]
+    async fn test_metrics_handler() {
+        let metrics = Arc::new(RwLock::new(Metrics::new().unwrap()));
+        let response = metrics_handler(axum::extract::State(metrics)).await;
+        // The response should be a valid Prometheus format even if empty
+        assert!(response.is_empty() || response.contains("# HELP") || response.contains("# TYPE"));
+    }
+
+    #[tokio::test]
+    async fn test_router_creation() {
+        let metrics = Arc::new(RwLock::new(Metrics::new().unwrap()));
+        let app = Router::new()
+            .route("/", get(root_handler))
+            .route("/metrics", get(metrics_handler))
+            .route("/health", get(health_handler))
+            .with_state(metrics.clone());
+
+        // Test root endpoint
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/").body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Test health endpoint
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/health").body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Test metrics endpoint
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/metrics").body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Test 404
+        let response = app
+            .oneshot(Request::builder().uri("/nonexistent").body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
