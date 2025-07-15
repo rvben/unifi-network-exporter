@@ -14,16 +14,14 @@ COPY src ./src
 RUN cargo build --release
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM alpine:3.22
 
 # Install runtime dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates
 
 # Create non-root user
-RUN groupadd -r -g 1000 appuser && \
-    useradd -r -u 1000 -g appuser appuser
+RUN addgroup -g 1000 -S appuser && \
+    adduser -u 1000 -S appuser -G appuser
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/unifi-network-exporter /usr/local/bin/unifi-network-exporter
