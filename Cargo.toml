@@ -1,0 +1,49 @@
+[package]
+name = "unifi-network-exporter"
+version = "0.1.0"
+edition = "2024"
+authors = ["Ruben J. Jongejan <ruben.jongejan@gmail.com>"]
+description = "Prometheus exporter for UniFi Network Controller"
+license = "MIT"
+repository = "https://github.com/rvben/unifi-network-exporter"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.45", features = ["full"] }
+
+# Web framework for metrics endpoint
+axum = "0.8"
+
+# HTTP client for UniFi API
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "cookies"] }
+
+# Prometheus metrics
+prometheus = "0.14"
+
+# JSON serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Base64 for cookie handling
+base64 = "0.22"
+
+# Cookie support
+cookie = "0.19"
+
+[dev-dependencies]
+# HTTP testing
+tower = "0.5"
+hyper = "1.0"
+tower-service = "0.3"
+wiremock = "0.6"
