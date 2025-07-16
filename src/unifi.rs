@@ -354,12 +354,12 @@ impl UniFiClient {
                 match serde_json::from_str::<ApiResponse>(&text) {
                     Ok(api_response) => Ok(api_response.data),
                     Err(e) => {
-                        eprintln!("Failed to parse device JSON: {}", e);
+                        eprintln!("Failed to parse device JSON: {e}");
                         eprintln!(
                             "Response text (first 500 chars): {}",
                             &text.chars().take(500).collect::<String>()
                         );
-                        Err(anyhow!("Failed to parse device response: {}", e))
+                        Err(anyhow!("Failed to parse device response: {e}"))
                     }
                 }
             }
@@ -399,12 +399,12 @@ impl UniFiClient {
                 match serde_json::from_str::<ApiResponse>(&text) {
                     Ok(api_response) => Ok(api_response.data),
                     Err(e) => {
-                        eprintln!("Failed to parse client JSON: {}", e);
+                        eprintln!("Failed to parse client JSON: {e}");
                         eprintln!(
                             "Response text (first 500 chars): {}",
                             &text.chars().take(500).collect::<String>()
                         );
-                        Err(anyhow!("Failed to parse client response: {}", e))
+                        Err(anyhow!("Failed to parse client response: {e}"))
                     }
                 }
             }
@@ -537,7 +537,7 @@ mod tests {
         assert_eq!(device.device_type, "uap");
         assert_eq!(device.model, Some("UAP-AC-Pro".to_string()));
         assert_eq!(device.version, Some("4.3.20".to_string()));
-        assert_eq!(device.adopted, true);
+        assert!(device.adopted);
         assert_eq!(device.state, 1);
         assert_eq!(device.uptime, Some(86400));
     }
@@ -573,8 +573,8 @@ mod tests {
         assert_eq!(client.tx_bytes, Some(1024000));
         assert_eq!(client.rx_bytes, Some(2048000));
         assert_eq!(client.uptime, Some(3600));
-        assert_eq!(client.is_wired, false);
-        assert_eq!(client.is_guest, false);
+        assert!(!client.is_wired);
+        assert!(!client.is_guest);
     }
 
     #[test]

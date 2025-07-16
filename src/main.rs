@@ -141,7 +141,8 @@ mod tests {
     #[test]
     fn test_main_components() {
         // Test that main components are properly defined
-        assert!(true);
+        // This is a placeholder test - it just verifies the module compiles
+        assert_eq!(1 + 1, 2);
     }
 
     #[tokio::test]

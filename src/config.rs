@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(config.poll_interval, 30);
         assert_eq!(config.log_level, "info");
         assert_eq!(config.http_timeout, 10);
-        assert_eq!(config.verify_ssl, true);
+        assert!(config.verify_ssl);
     }
 
     #[test]
