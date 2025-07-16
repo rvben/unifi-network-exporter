@@ -602,9 +602,9 @@ mod tests {
     #[test]
     fn test_sys_stats_deserialize() {
         let json = r#"{
-            "loadavg_1": 1.5,
-            "loadavg_5": 1.2,
-            "loadavg_15": 1.0,
+            "loadavg_1": "1.5",
+            "loadavg_5": "1.2",
+            "loadavg_15": "1.0",
             "mem_total": 1073741824,
             "mem_used": 536870912
         }"#;
@@ -612,6 +612,20 @@ mod tests {
         assert_eq!(stats.loadavg_1, Some(1.5));
         assert_eq!(stats.loadavg_5, Some(1.2));
         assert_eq!(stats.loadavg_15, Some(1.0));
+        assert_eq!(stats.mem_total, Some(1073741824));
+        assert_eq!(stats.mem_used, Some(536870912));
+    }
+
+    #[test]
+    fn test_sys_stats_deserialize_missing_fields() {
+        let json = r#"{
+            "mem_total": 1073741824,
+            "mem_used": 536870912
+        }"#;
+        let stats: SysStats = serde_json::from_str(json).unwrap();
+        assert_eq!(stats.loadavg_1, None);
+        assert_eq!(stats.loadavg_5, None);
+        assert_eq!(stats.loadavg_15, None);
         assert_eq!(stats.mem_total, Some(1073741824));
         assert_eq!(stats.mem_used, Some(536870912));
     }
