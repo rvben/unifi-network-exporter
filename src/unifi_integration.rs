@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 
 // Integration API response wrapper
 #[derive(Debug, Deserialize)]
@@ -81,6 +82,7 @@ impl IntegrationDevice {
             uptime: None,
             sys_stats: None,
             stat: None,
+            extra: HashMap::new(),
         }
     }
 }
@@ -102,6 +104,7 @@ impl IntegrationClient {
             uptime: None,
             is_wired: self.client_type == "WIRED",
             is_guest: self.access.access_type == "GUEST",
+            extra: HashMap::new(),
         }
     }
 }

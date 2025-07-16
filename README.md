@@ -7,6 +7,8 @@
 
 Prometheus exporter for UniFi Network Controller metrics.
 
+**Tested with UniFi Network Controller version 9.3.43**
+
 ## Features
 
 - **Device Metrics**: Monitor UniFi devices (APs, switches, gateways)

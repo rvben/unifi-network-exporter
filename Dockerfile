@@ -13,24 +13,17 @@ COPY src ./src
 # Build the application
 RUN cargo build --release
 
-# Runtime stage
-FROM alpine:3.22
+# Runtime stage - use debian slim for CA certificates support
+FROM debian:12-slim
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates
-
-# Create non-root user
-RUN addgroup -g 1000 -S appuser && \
-    adduser -u 1000 -S appuser -G appuser
+# Install CA certificates
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/unifi-network-exporter /usr/local/bin/unifi-network-exporter
-
-# Switch to non-root user
-USER appuser
 
 # Expose metrics port
 EXPOSE 9897
 
 # Run the binary
-ENTRYPOINT ["unifi-network-exporter"]
+ENTRYPOINT ["/usr/local/bin/unifi-network-exporter"]

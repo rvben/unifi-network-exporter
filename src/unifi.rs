@@ -1,15 +1,29 @@
 use anyhow::{Result, anyhow};
 use reqwest::header::{ACCEPT, COOKIE, HeaderMap, HeaderValue};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-use crate::unifi_integration::{
-    IntegrationClient, IntegrationDevice, IntegrationResponse, IntegrationSite,
-};
+use crate::unifi_integration::{IntegrationResponse, IntegrationSite};
+
+// Helper function to deserialize optional string to f64
+fn deserialize_optional_string_to_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // This handles fields that might be missing entirely
+    let opt: Option<Option<String>> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(Some(s)) => s.parse::<f64>()
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        _ => Ok(None),
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum UniFiError {
@@ -52,17 +66,26 @@ pub struct Device {
     pub device_type: String,
     pub model: Option<String>,
     pub version: Option<String>,
+    #[serde(default)]
     pub adopted: bool,
+    #[serde(default)]
     pub state: i32,
     pub uptime: Option<i64>,
     pub sys_stats: Option<SysStats>,
     pub stat: Option<DeviceStats>,
+    
+    // Catch-all for additional fields from the API
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct SysStats {
+    #[serde(default, deserialize_with = "deserialize_optional_string_to_f64")]
     pub loadavg_1: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_optional_string_to_f64")]
     pub loadavg_5: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_optional_string_to_f64")]
     pub loadavg_15: Option<f64>,
     pub mem_total: Option<i64>,
     pub mem_used: Option<i64>,
@@ -93,8 +116,14 @@ pub struct Client {
     pub tx_bytes: Option<i64>,
     pub rx_bytes: Option<i64>,
     pub uptime: Option<i64>,
+    #[serde(default)]
     pub is_wired: bool,
+    #[serde(default)]
     pub is_guest: bool,
+    
+    // Catch-all for additional fields from the API
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -306,26 +335,18 @@ impl UniFiClient {
 
     pub async fn get_devices(&self) -> Result<Vec<Device>> {
         match &self.auth_method {
-            AuthMethod::ApiKey(_) => {
-                // First get the site ID
-                let sites = self.get_sites().await?;
-                let site = sites
-                    .iter()
-                    .find(|s| s.name == self.site || s.desc == self.site)
-                    .ok_or_else(|| anyhow!("Site '{}' not found", self.site))?;
-
+            AuthMethod::ApiKey(key) => {
+                // Use the regular API with API key authentication for full metrics
                 let url = format!(
-                    "{}/proxy/network/integration/v1/sites/{}/devices",
-                    self.base_url, site._id
+                    "{}/proxy/network/api/s/{}/stat/device",
+                    self.base_url, self.site
                 );
 
                 debug!("Making request to: {}", url);
 
                 let mut headers = HeaderMap::new();
                 headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-                if let AuthMethod::ApiKey(key) = &self.auth_method {
-                    headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
-                }
+                headers.insert("X-API-KEY", HeaderValue::from_str(key)?);
 
                 let response = self.client.get(&url).headers(headers).send().await?;
 
@@ -333,12 +354,22 @@ impl UniFiClient {
                     return Err(anyhow!("API request failed: {}", response.status()));
                 }
 
-                let api_response: IntegrationResponse<IntegrationDevice> = response.json().await?;
-                Ok(api_response
-                    .data
-                    .into_iter()
-                    .map(|d| d.to_device())
-                    .collect())
+                #[derive(Debug, Deserialize)]
+                struct ApiResponse {
+                    #[allow(dead_code)]
+                    meta: Meta,
+                    data: Vec<Device>,
+                }
+
+                let text = response.text().await?;
+                match serde_json::from_str::<ApiResponse>(&text) {
+                    Ok(api_response) => Ok(api_response.data),
+                    Err(e) => {
+                        eprintln!("Failed to parse device JSON: {}", e);
+                        eprintln!("Response text (first 500 chars): {}", &text.chars().take(500).collect::<String>());
+                        Err(anyhow!("Failed to parse device response: {}", e))
+                    }
+                }
             }
             AuthMethod::UserPass { .. } => self.get_legacy("stat/device").await,
         }
@@ -346,26 +377,18 @@ impl UniFiClient {
 
     pub async fn get_clients(&self) -> Result<Vec<Client>> {
         match &self.auth_method {
-            AuthMethod::ApiKey(_) => {
-                // First get the site ID
-                let sites = self.get_sites().await?;
-                let site = sites
-                    .iter()
-                    .find(|s| s.name == self.site || s.desc == self.site)
-                    .ok_or_else(|| anyhow!("Site '{}' not found", self.site))?;
-
+            AuthMethod::ApiKey(key) => {
+                // Use the regular API with API key authentication for full metrics
                 let url = format!(
-                    "{}/proxy/network/integration/v1/sites/{}/clients",
-                    self.base_url, site._id
+                    "{}/proxy/network/api/s/{}/stat/sta",
+                    self.base_url, self.site
                 );
 
                 debug!("Making request to: {}", url);
 
                 let mut headers = HeaderMap::new();
                 headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-                if let AuthMethod::ApiKey(key) = &self.auth_method {
-                    headers.insert("X-API-KEY", HeaderValue::from_str(key).unwrap());
-                }
+                headers.insert("X-API-KEY", HeaderValue::from_str(key)?);
 
                 let response = self.client.get(&url).headers(headers).send().await?;
 
@@ -373,12 +396,22 @@ impl UniFiClient {
                     return Err(anyhow!("API request failed: {}", response.status()));
                 }
 
-                let api_response: IntegrationResponse<IntegrationClient> = response.json().await?;
-                Ok(api_response
-                    .data
-                    .into_iter()
-                    .map(|c| c.to_client())
-                    .collect())
+                #[derive(Debug, Deserialize)]
+                struct ApiResponse {
+                    #[allow(dead_code)]
+                    meta: Meta,
+                    data: Vec<Client>,
+                }
+
+                let text = response.text().await?;
+                match serde_json::from_str::<ApiResponse>(&text) {
+                    Ok(api_response) => Ok(api_response.data),
+                    Err(e) => {
+                        eprintln!("Failed to parse client JSON: {}", e);
+                        eprintln!("Response text (first 500 chars): {}", &text.chars().take(500).collect::<String>());
+                        Err(anyhow!("Failed to parse client response: {}", e))
+                    }
+                }
             }
             AuthMethod::UserPass { .. } => self.get_legacy("stat/sta").await,
         }
