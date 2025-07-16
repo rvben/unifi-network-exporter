@@ -1,7 +1,6 @@
 use anyhow::{Result, anyhow};
 use reqwest::header::{ACCEPT, COOKIE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -73,10 +72,6 @@ pub struct Device {
     pub uptime: Option<i64>,
     pub sys_stats: Option<SysStats>,
     pub stat: Option<DeviceStats>,
-    
-    // Catch-all for additional fields from the API
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -120,10 +115,6 @@ pub struct Client {
     pub is_wired: bool,
     #[serde(default)]
     pub is_guest: bool,
-    
-    // Catch-all for additional fields from the API
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

@@ -508,7 +508,6 @@ mod tests {
             uptime: Some(100),
             sys_stats: None,
             stat: None,
-            extra: std::collections::HashMap::new(),
         }];
 
         metrics.update_devices(&devices);
@@ -549,8 +548,7 @@ mod tests {
                     tx_packets: Some(1000),
                     rx_packets: Some(2000),
                 }),
-                extra: std::collections::HashMap::new(),
-            },
+                },
             Device {
                 _id: "device2".to_string(),
                 name: None,
@@ -563,8 +561,7 @@ mod tests {
                 uptime: None,
                 sys_stats: None,
                 stat: None,
-                extra: std::collections::HashMap::new(),
-            },
+                },
         ];
 
         metrics.update_devices(&devices);
@@ -615,8 +612,7 @@ mod tests {
                 uptime: Some(3600),
                 is_wired: false,
                 is_guest: false,
-                extra: std::collections::HashMap::new(),
-            },
+                },
             Client {
                 _id: "client2".to_string(),
                 mac: "aa:bb:cc:dd:ee:00".to_string(),
@@ -632,8 +628,7 @@ mod tests {
                 uptime: Some(1800),
                 is_wired: true,
                 is_guest: true,
-                extra: std::collections::HashMap::new(),
-            },
+                },
         ];
 
         metrics.update_clients(&clients);
@@ -705,7 +700,6 @@ mod tests {
             uptime: None,
             sys_stats: None,
             stat: None,
-            extra: std::collections::HashMap::new(),
         }];
 
         metrics.update_devices(&devices);
@@ -737,7 +731,6 @@ mod tests {
                 mem_used: Some(750),
             }),
             stat: None,
-            extra: std::collections::HashMap::new(),
         }];
 
         metrics.update_devices(&devices);
@@ -768,8 +761,7 @@ mod tests {
                 uptime: None,
                 is_wired: true,
                 is_guest: false,
-                extra: std::collections::HashMap::new(),
-            },
+                },
             // Wireless guest client
             Client {
                 _id: "c2".to_string(),
@@ -786,8 +778,7 @@ mod tests {
                 uptime: None,
                 is_wired: false,
                 is_guest: true,
-                extra: std::collections::HashMap::new(),
-            },
+                },
             // Another wireless non-guest client
             Client {
                 _id: "c3".to_string(),
@@ -804,8 +795,7 @@ mod tests {
                 uptime: None,
                 is_wired: false,
                 is_guest: false,
-                extra: std::collections::HashMap::new(),
-            },
+                },
         ];
 
         metrics.update_clients(&clients);
