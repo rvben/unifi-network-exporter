@@ -548,7 +548,7 @@ mod tests {
                     tx_packets: Some(1000),
                     rx_packets: Some(2000),
                 }),
-                },
+            },
             Device {
                 _id: "device2".to_string(),
                 name: None,
@@ -561,7 +561,7 @@ mod tests {
                 uptime: None,
                 sys_stats: None,
                 stat: None,
-                },
+            },
         ];
 
         metrics.update_devices(&devices);
@@ -612,7 +612,7 @@ mod tests {
                 uptime: Some(3600),
                 is_wired: false,
                 is_guest: false,
-                },
+            },
             Client {
                 _id: "client2".to_string(),
                 mac: "aa:bb:cc:dd:ee:00".to_string(),
@@ -628,7 +628,7 @@ mod tests {
                 uptime: Some(1800),
                 is_wired: true,
                 is_guest: true,
-                },
+            },
         ];
 
         metrics.update_clients(&clients);
@@ -761,7 +761,7 @@ mod tests {
                 uptime: None,
                 is_wired: true,
                 is_guest: false,
-                },
+            },
             // Wireless guest client
             Client {
                 _id: "c2".to_string(),
@@ -778,7 +778,7 @@ mod tests {
                 uptime: None,
                 is_wired: false,
                 is_guest: true,
-                },
+            },
             // Another wireless non-guest client
             Client {
                 _id: "c3".to_string(),
@@ -795,7 +795,7 @@ mod tests {
                 uptime: None,
                 is_wired: false,
                 is_guest: false,
-                },
+            },
         ];
 
         metrics.update_clients(&clients);

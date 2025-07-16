@@ -17,9 +17,7 @@ where
     // This handles fields that might be missing entirely
     let opt: Option<Option<String>> = Option::deserialize(deserializer)?;
     match opt {
-        Some(Some(s)) => s.parse::<f64>()
-            .map(Some)
-            .map_err(serde::de::Error::custom),
+        Some(Some(s)) => s.parse::<f64>().map(Some).map_err(serde::de::Error::custom),
         _ => Ok(None),
     }
 }
@@ -357,7 +355,10 @@ impl UniFiClient {
                     Ok(api_response) => Ok(api_response.data),
                     Err(e) => {
                         eprintln!("Failed to parse device JSON: {}", e);
-                        eprintln!("Response text (first 500 chars): {}", &text.chars().take(500).collect::<String>());
+                        eprintln!(
+                            "Response text (first 500 chars): {}",
+                            &text.chars().take(500).collect::<String>()
+                        );
                         Err(anyhow!("Failed to parse device response: {}", e))
                     }
                 }
@@ -399,7 +400,10 @@ impl UniFiClient {
                     Ok(api_response) => Ok(api_response.data),
                     Err(e) => {
                         eprintln!("Failed to parse client JSON: {}", e);
-                        eprintln!("Response text (first 500 chars): {}", &text.chars().take(500).collect::<String>());
+                        eprintln!(
+                            "Response text (first 500 chars): {}",
+                            &text.chars().take(500).collect::<String>()
+                        );
                         Err(anyhow!("Failed to parse client response: {}", e))
                     }
                 }
