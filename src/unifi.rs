@@ -146,6 +146,19 @@ pub struct UniFiClient {
     auth_cookies: Arc<RwLock<Option<String>>>,
 }
 
+/// Build a UniFi legacy (cookie-auth) API URL.
+///
+/// Site-scoped endpoints live under `/api/s/<site>/`, controller-global
+/// endpoints like `/self/sites` live under `/api/` directly.
+fn legacy_url(base_url: &str, site: &str, path: &str, site_scoped: bool) -> String {
+    let path = path.trim_start_matches('/');
+    if site_scoped {
+        format!("{base_url}/api/s/{site}/{path}")
+    } else {
+        format!("{base_url}/api/{path}")
+    }
+}
+
 impl UniFiClient {
     pub fn new(
         base_url: String,
@@ -242,7 +255,7 @@ impl UniFiClient {
         }
     }
 
-    async fn get_legacy<T>(&self, path: &str) -> Result<Vec<T>>
+    async fn get_legacy<T>(&self, path: &str, site_scoped: bool) -> Result<Vec<T>>
     where
         T: serde::de::DeserializeOwned,
     {
@@ -256,13 +269,10 @@ impl UniFiClient {
                 )
             }
             AuthMethod::UserPass { .. } => {
-                // Cookie auth uses traditional API path
-                format!(
-                    "{}/api/s/{}/{}",
-                    self.base_url,
-                    self.site,
-                    path.trim_start_matches('/')
-                )
+                // Cookie auth uses traditional API path. Site-scoped endpoints
+                // live under /api/s/<site>/, controller-global endpoints like
+                // /self/sites live under /api/ directly.
+                legacy_url(&self.base_url, &self.site, path, site_scoped)
             }
         };
 
@@ -363,7 +373,7 @@ impl UniFiClient {
                     }
                 }
             }
-            AuthMethod::UserPass { .. } => self.get_legacy("stat/device").await,
+            AuthMethod::UserPass { .. } => self.get_legacy("stat/device", true).await,
         }
     }
 
@@ -408,7 +418,7 @@ impl UniFiClient {
                     }
                 }
             }
-            AuthMethod::UserPass { .. } => self.get_legacy("stat/sta").await,
+            AuthMethod::UserPass { .. } => self.get_legacy("stat/sta", true).await,
         }
     }
 
@@ -434,7 +444,7 @@ impl UniFiClient {
                 let api_response: IntegrationResponse<IntegrationSite> = response.json().await?;
                 Ok(api_response.data.into_iter().map(|s| s.to_site()).collect())
             }
-            AuthMethod::UserPass { .. } => self.get_legacy("/self/sites").await,
+            AuthMethod::UserPass { .. } => self.get_legacy("self/sites", false).await,
         }
     }
 }
@@ -506,6 +516,32 @@ mod tests {
         )
         .unwrap();
         assert_eq!(client.base_url, "https://192.168.1.1:8443");
+    }
+
+    #[test]
+    fn test_legacy_url_site_scoped() {
+        let url = legacy_url("https://controller:8443", "site1", "stat/device", true);
+        assert_eq!(url, "https://controller:8443/api/s/site1/stat/device");
+    }
+
+    #[test]
+    fn test_legacy_url_site_scoped_strips_leading_slash() {
+        let url = legacy_url("https://controller:8443", "site1", "/stat/sta", true);
+        assert_eq!(url, "https://controller:8443/api/s/site1/stat/sta");
+    }
+
+    #[test]
+    fn test_legacy_url_global_endpoint() {
+        // /self/sites is controller-global, not site-scoped: it must live
+        // under /api/ directly, not under /api/s/<site>/ (#1).
+        let url = legacy_url("https://controller:8443", "site1", "self/sites", false);
+        assert_eq!(url, "https://controller:8443/api/self/sites");
+    }
+
+    #[test]
+    fn test_legacy_url_global_endpoint_strips_leading_slash() {
+        let url = legacy_url("https://controller:8443", "site1", "/self/sites", false);
+        assert_eq!(url, "https://controller:8443/api/self/sites");
     }
 
     #[test]
