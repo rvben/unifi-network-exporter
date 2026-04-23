@@ -392,15 +392,14 @@ impl Metrics {
             }
 
             // Signal strength (wireless only)
-            if !client.is_wired {
-                if let Some(signal) = client.signal {
-                    let signal_labels =
-                        [client._id.clone(), client.mac.clone(), hostname.to_string()];
-                    let signal_refs: Vec<&str> = signal_labels.iter().map(|s| s.as_str()).collect();
-                    self.client_signal_strength
-                        .with_label_values(&signal_refs)
-                        .set(signal as i64);
-                }
+            if !client.is_wired
+                && let Some(signal) = client.signal
+            {
+                let signal_labels = [client._id.clone(), client.mac.clone(), hostname.to_string()];
+                let signal_refs: Vec<&str> = signal_labels.iter().map(|s| s.as_str()).collect();
+                self.client_signal_strength
+                    .with_label_values(&signal_refs)
+                    .set(signal as i64);
             }
 
             // Uptime
