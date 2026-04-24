@@ -2,7 +2,7 @@
 
 # Variables
 BINARY_NAME=unifi-network-exporter
-DOCKER_IMAGE=unifi-network-exporter
+DOCKER_IMAGE=rvben/unifi-network-exporter
 DOCKER_TAG=latest
 
 # Default target
