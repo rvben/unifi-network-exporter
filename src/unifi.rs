@@ -367,7 +367,7 @@ impl UniFiClient {
                         eprintln!("Failed to parse device JSON: {e}");
                         eprintln!(
                             "Response text (first 500 chars): {}",
-                            &text.chars().take(500).collect::<String>()
+                            text.chars().take(500).collect::<String>()
                         );
                         Err(anyhow!("Failed to parse device response: {e}"))
                     }
@@ -412,7 +412,7 @@ impl UniFiClient {
                         eprintln!("Failed to parse client JSON: {e}");
                         eprintln!(
                             "Response text (first 500 chars): {}",
-                            &text.chars().take(500).collect::<String>()
+                            text.chars().take(500).collect::<String>()
                         );
                         Err(anyhow!("Failed to parse client response: {e}"))
                     }
