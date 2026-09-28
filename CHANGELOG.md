@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.2](https://github.com/rvben/unifi-network-exporter/compare/v0.1.6...v0.2.2) - 2026-09-28
+
+### Changed
+
+- Version realigned above the 0.2.0 and 0.2.1 tags published in 2025, so `latest` and the highest version tag resolve to current code. Functionally identical to 0.1.6.
+
 ## [0.1.6](https://github.com/rvben/unifi-network-exporter/compare/v0.1.5...v0.1.6) - 2026-09-27
 
 ### Fixed
